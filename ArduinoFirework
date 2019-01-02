@@ -1,0 +1,415 @@
+// Code by Rodders
+//
+//copied from Element14 Community: Peter the Pumpkin
+
+
+#include <Adafruit_NeoPixel.h>
+
+
+#define WS2812_PIN 7
+
+#define numTail 50
+#define numArm  10
+
+#define tailFeedIn 4
+#define armFeedIn 16
+#define PIXELCOUNT 60
+
+
+#define NUM_LEDS 20 //not used?
+
+// Parameter 1 = number of pixels in strip
+// Parameter 2 = pin number (most are valid)
+// Parameter 3 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXELCOUNT, WS2812_PIN, NEO_GRB + NEO_KHZ800);
+
+#define BAUDRATE (9600)
+
+
+enum  mode_t{
+  WS2812test=1,
+  FireworkFSR=2,
+};
+
+enum  mode_FSR{
+  PreDelay=1,
+  Ignite=2,
+  PreDelay2=3,
+  Explode=4,
+};
+
+struct pixel {
+  byte red;
+  byte green;
+  byte blue;
+};
+
+
+enum mode_t thisMode=FireworkFSR;
+enum mode_FSR currentFSR=PreDelay;
+struct pixel pixelArrayTail[numTail + tailFeedIn];
+struct pixel pixelArrayArm[numArm + armFeedIn];
+
+/*******************************************
+*             ARDUINO SETUP
+********************************************/
+void setup() {
+   
+  pinMode(WS2812_PIN,OUTPUT); 
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+
+  Serial.begin(BAUDRATE);
+  Serial.print("Welcome to WS2811 Test.");
+  
+}
+
+/*******************************************
+*             MAIN LOOP
+********************************************/
+void loop() {
+
+  /*******************************************
+  *             TEST WS2812
+  ********************************************/
+  //WS2812 test
+  if (thisMode==WS2812test){
+    
+    uint32_t greenishwhite = strip.Color(0, 64, 0);
+    int iRed;
+    int iGreen;
+    int iBlue;
+    int step=2;
+
+    for (int i=0; i<PIXELCOUNT; i++){
+      strip.setPixelColor(i, iRed, iGreen, iBlue);    
+    }    
+    strip.show();
+
+    while(1){
+
+      iRed=0;
+      iGreen=255;
+      iBlue=0;
+      
+      for (int i=255; i>0; i=i-1){
+        if (iRed>step) iRed=iRed-step;
+        if (iGreen>step) iGreen=iGreen-step;
+        if (iBlue>step) iBlue=iBlue-step;
+        
+      for (int i=0; i<PIXELCOUNT; i++){
+        strip.setPixelColor(i, iRed, iGreen, iBlue);    
+      } 
+        strip.show();
+        delay(10);
+      }
+      
+  }//while (1)  
+}////WS2812 test
+
+
+/*******************************************
+*             FIREWORK FSR
+********************************************/
+if (thisMode==FireworkFSR){
+  long randNumber;
+
+  switch(currentFSR){
+
+    case PreDelay:
+      randNumber = random(500, 5000);
+      delay(randNumber);
+      currentFSR=Ignite;
+      break;
+
+    case Ignite: //the effect where the rocket flies into the sky, slows and dims
+      FireworkShootUp();
+      currentFSR=PreDelay2;
+      break;
+
+    case PreDelay2:
+      randNumber = random(100, 1000);
+      delay(randNumber);;
+      currentFSR=Explode;
+      break;
+
+    case Explode:
+      FireworkExplode();
+      currentFSR=PreDelay;
+      break;  
+  }  
+}
+}//loop
+
+
+/*******************************************
+*             FIREWORK SHOOT UPWARD
+********************************************/
+void FireworkShootUp(){
+
+double dimFactor = 0.95;
+
+  int shootUpDelay;
+  //shootUpDelay = random(10, 50);
+  shootUpDelay=20;
+
+
+    //preload the start N bytes of the array
+    pixelArrayTail[0]={30,30,30};
+    pixelArrayTail[1]={100,100,100};
+    pixelArrayTail[2]={150,150,150};
+    pixelArrayTail[3]={255,255,255};
+    for (int i=tailFeedIn; i<(numTail+tailFeedIn); i++){
+      pixelArrayTail[i]={0,0,0};   
+    }
+
+    //Loop and display as shuffled along
+    for (int i=0; i<(numTail+tailFeedIn); i++){
+      //Output the array
+      for (int j=0; j<numTail; j++){
+        setPixel(j, pixelArrayTail[j+tailFeedIn].red,  pixelArrayTail[j+tailFeedIn].green,  pixelArrayTail[j+tailFeedIn].blue); 
+      }//j1
+      showStrip();
+      delay(shootUpDelay);
+      shootUpDelay=shootUpDelay+1;
+      //Shuffle the array along
+      for (int j=(numTail+tailFeedIn-1); j>0; j--){
+        pixelArrayTail[j+1].red = (int) pixelArrayTail[j].red * dimFactor;
+        pixelArrayTail[j+1].green = (int) pixelArrayTail[j].green * dimFactor;
+        pixelArrayTail[j+1].blue = (int) pixelArrayTail[j].blue * dimFactor;  
+      }//j2    
+      pixelArrayTail[1]={0,0,0};
+      pixelArrayTail[0]={0,0,0};
+    }//i
+    
+    
+}
+
+/*******************************************
+*             FIREWORK EXPLODE
+********************************************/
+void FireworkExplode(){
+ 
+ int explodeDelay;
+  explodeDelay=random(20,50);
+
+long pattern = random(6);
+
+  if (pattern==0){
+    //preload the start N bytes of the array
+    pixelArrayArm[0]={30,30,0};
+    pixelArrayArm[1]={80,80,0};
+    pixelArrayArm[2]={150,150,0};
+    pixelArrayArm[3]={255,255,0};
+    pixelArrayArm[4]={0,0,0};
+    pixelArrayArm[5]={255,255,255};
+    pixelArrayArm[6]={100,100,0};
+    pixelArrayArm[7]={200,200,0};
+    pixelArrayArm[8]={0,0,0};
+    pixelArrayArm[9]={0,0,0};
+    pixelArrayArm[10]={100,100,0};
+    pixelArrayArm[11]={200,200,0};
+    pixelArrayArm[12]={255,255,0};
+    pixelArrayArm[13]={255,255,255};
+    pixelArrayArm[14]={100,100,100};
+    pixelArrayArm[15]={255,255,255};
+  }
+
+  else if (pattern==1){
+    //preload the start N bytes of the array
+    pixelArrayArm[0]={0,30,30};
+    pixelArrayArm[1]={0,80,80};
+    pixelArrayArm[2]={0,150,150};
+    pixelArrayArm[3]={0,255,255};
+    pixelArrayArm[4]={0,0,0};
+    pixelArrayArm[5]={255,255,255};
+    pixelArrayArm[6]={0,100,100};
+    pixelArrayArm[7]={0,200,200};
+    pixelArrayArm[8]={0,0,0};
+    pixelArrayArm[9]={0,0,0};
+    pixelArrayArm[10]={0,100,100};
+    pixelArrayArm[11]={0,200,200};
+    pixelArrayArm[12]={0,255,0};
+    pixelArrayArm[13]={255,255,255};
+    pixelArrayArm[14]={100,100,100};
+    pixelArrayArm[15]={255,255,255};
+  } 
+  else if (pattern==2){
+    //preload the start N bytes of the array
+    pixelArrayArm[0]={0,30,00};
+    pixelArrayArm[1]={0x0, 0x81, 0x0};
+    pixelArrayArm[2]={0x0, 0x8A, 0x0};
+    pixelArrayArm[3]={0x0, 0x93, 0x0};
+    pixelArrayArm[4]={0x0, 0x9C, 0x0};
+    pixelArrayArm[5]={0x0, 0xA5, 0x0};
+    pixelArrayArm[6]={0x0, 0xAE, 0x0};
+    pixelArrayArm[7]={0x0, 0x00, 0x0};
+    pixelArrayArm[8]={0xA0, 0xA0, 0xA0};
+    pixelArrayArm[9]={0x0, 0xC9, 0x0};
+    pixelArrayArm[10]={0x0, 0xD2, 0x0};
+    pixelArrayArm[11]={0x0, 0x00, 0x0,};
+    pixelArrayArm[12]={0xff, 0xff, 0xff};
+    pixelArrayArm[13]={0x0, 0x00, 0x0};
+    pixelArrayArm[14]={0x0, 0xF6, 0x0};
+    pixelArrayArm[15]={0x0, 0xFF, 0x0};
+  }  
+  else if (pattern==3){
+    //preload the start N bytes of the array
+    pixelArrayArm[0]={5,0,0};
+    pixelArrayArm[1]={20,0,0};
+    pixelArrayArm[2]={0,0,0};
+    pixelArrayArm[3]={50,0,0};
+    pixelArrayArm[4]={100,0,0};
+    pixelArrayArm[5]={0,0,0};
+    pixelArrayArm[6]={150,150,150};
+    pixelArrayArm[7]={100,0,0};
+    pixelArrayArm[8]={0,0,0};
+    pixelArrayArm[9]={100,0,0};
+    pixelArrayArm[10]={150,0,0};
+    pixelArrayArm[11]={200,0,0};
+    pixelArrayArm[12]={255,0,0};
+    pixelArrayArm[13]={255,255,255};
+    pixelArrayArm[14]={50,0,0};
+    pixelArrayArm[15]={255,0,0};
+  }  
+  else if (pattern==4){
+    //preload the start N bytes of the array
+    pixelArrayArm[0]={0,0,10};
+    pixelArrayArm[1]={0,0,50};
+    pixelArrayArm[2]={0,0,100};
+    pixelArrayArm[3]={0,0,150};
+    pixelArrayArm[4]={0,0,0};
+    pixelArrayArm[5]={50,50,50};
+    pixelArrayArm[6]={150,150,150};
+    pixelArrayArm[7]={0,0,0};
+    pixelArrayArm[8]={0,0,100};
+    pixelArrayArm[9]={0,0,255};
+    pixelArrayArm[10]={0,0,20};
+    pixelArrayArm[11]={0,0,100};
+    pixelArrayArm[12]={0,0,255};
+    pixelArrayArm[13]={0,0,255};
+    pixelArrayArm[14]={0,0,0};
+    pixelArrayArm[15]={255,255,255};
+  }  
+
+  else  {
+    //preload the start N bytes of the array
+    pixelArrayArm[0]={30,0,30};
+    pixelArrayArm[1]={80,0,80};
+    pixelArrayArm[2]={150,0,150};
+    pixelArrayArm[3]={255,0,255};
+    pixelArrayArm[4]={0,0,0};
+    pixelArrayArm[5]={255,255,255};
+    pixelArrayArm[6]={100,0,100};
+    pixelArrayArm[7]={200,0,200};
+    pixelArrayArm[8]={0,0,0};
+    pixelArrayArm[9]={0,0,0};
+    pixelArrayArm[10]={100,0,100};
+    pixelArrayArm[11]={200,0,200};
+    pixelArrayArm[12]={255,0,255};
+    pixelArrayArm[13]={255,255,255};
+    pixelArrayArm[14]={100,100,100};
+    pixelArrayArm[15]={255,255,255};
+  }
+    
+    for (int i=armFeedIn; i<(numArm+armFeedIn); i++){
+      pixelArrayArm[i].red=0;
+      pixelArrayArm[i].green=0;
+      pixelArrayArm[i].blue=0;  
+    }
+
+    //Loop and display as shuffled along
+    for (int i=0; i<(numArm+armFeedIn); i++){
+      
+      //Output the array
+      for (int j=0; j<numArm; j++){
+        setPixel(j+numTail, pixelArrayArm[j+armFeedIn].red,  pixelArrayArm[j+armFeedIn].green,  pixelArrayArm[j+armFeedIn].blue); 
+      }//j1
+      showStrip();
+      delay(explodeDelay);
+
+      
+      //Shuffle the array along
+      for (int j=(numArm+armFeedIn-1); j>0; j--){
+        pixelArrayArm[j+1].red = pixelArrayArm[j].red;
+        pixelArrayArm[j+1].green = pixelArrayArm[j].green;
+        pixelArrayArm[j+1].blue = pixelArrayArm[j].blue;  
+      }//j2    
+      pixelArrayArm[1]={0,0,0};
+      pixelArrayArm[0]={0,0,0};
+    }//i  
+}
+
+
+//RunningLights(0xff,0xff,0x00, 50);
+
+
+void RunningLights(byte red, byte green, byte blue, int WaveDelay) {
+  int Position=0;
+ 
+  for(int j=0; j<NUM_LEDS*2; j++)
+  {
+      Position++; // = 0; //Position + Rate;
+      for(int i=0; i<NUM_LEDS; i++) {
+        // sine wave, 3 offset waves make a rainbow!
+        //float level = sin(i+Position) * 127 + 128;
+        //setPixel(i,level,0,0);
+        //float level = sin(i+Position) * 127 + 128;
+        setPixel(i,((sin(i+Position) * 127 + 128)/255)*red,
+                   ((sin(i+Position) * 127 + 128)/255)*green,
+                   ((sin(i+Position) * 127 + 128)/255)*blue);
+      }
+     
+      showStrip();
+      delay(WaveDelay);
+  }
+}
+
+void showStrip() {
+
+ #ifdef ADAFRUIT_NEOPIXEL_H
+
+   // NeoPixel
+   strip.show();
+ #endif
+
+ #ifndef ADAFRUIT_NEOPIXEL_H
+
+   // FastLED
+   FastLED.show();
+ #endif
+
+}
+
+void setPixel(int Pixel, byte red, byte green, byte blue) {
+
+ #ifdef ADAFRUIT_NEOPIXEL_H
+
+   // NeoPixel
+   strip.setPixelColor(Pixel, strip.Color(red, green, blue));
+
+ #endif
+
+ #ifndef ADAFRUIT_NEOPIXEL_H
+
+   // FastLED
+   leds[Pixel].r = red;
+   leds[Pixel].g = green;
+   leds[Pixel].b = blue;
+
+ #endif
+
+}
+
+void setAll(byte red, byte green, byte blue) {
+
+  for(int i = 0; i < NUM_LEDS; i++ ) {
+    setPixel(i, red, green, blue); 
+  }
+
+  showStrip();
+}
